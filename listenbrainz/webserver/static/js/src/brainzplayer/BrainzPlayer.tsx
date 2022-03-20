@@ -10,11 +10,12 @@ import {
   debounce,
   cloneDeep,
   omit,
+  get,
 } from "lodash";
 import { faPlayCircle } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { IconProp } from "@fortawesome/fontawesome-svg-core";
-import PlaybackControls from "./PlaybackControls";
+import BrainzPlayerUI from "./BrainzPlayerUI";
 import GlobalAppContext from "../utils/GlobalAppContext";
 import SpotifyPlayer from "./SpotifyPlayer";
 import YoutubePlayer from "./YoutubePlayer";
@@ -179,7 +180,7 @@ export default class BrainzPlayer extends React.Component<
   componentDidMount = () => {
     window.addEventListener("storage", this.onLocalStorageEvent);
     window.addEventListener("message", this.receiveBrainzPlayerMessage);
-
+    window.addEventListener("beforeunload", this.alertBeforeClosingPage);
     // Remove SpotifyPlayer if the user doesn't have the relevant permissions to use it
     const { spotifyAuth } = this.context;
     if (
@@ -193,7 +194,21 @@ export default class BrainzPlayer extends React.Component<
   componentWillUnMount = () => {
     window.removeEventListener("storage", this.onLocalStorageEvent);
     window.removeEventListener("message", this.receiveBrainzPlayerMessage);
+    window.removeEventListener("beforeunload", this.alertBeforeClosingPage);
     this.stopPlayerStateTimer();
+  };
+
+  alertBeforeClosingPage = (event: BeforeUnloadEvent) => {
+    const { playerPaused } = this.state;
+    if (!playerPaused) {
+      // Some old browsers may allow to set a custom message, but this is deprecated.
+      event.preventDefault();
+      // eslint-disable-next-line no-param-reassign
+      event.returnValue = `You are currently playing music from this page.
+      Are you sure you want to close it? Playback will be stopped.`;
+      return event.returnValue;
+    }
+    return null;
   };
 
   receiveBrainzPlayerMessage = (event: MessageEvent) => {
@@ -762,17 +777,19 @@ export default class BrainzPlayer extends React.Component<
       progressMs,
       durationMs,
       isActivated,
+      currentListen,
     } = this.state;
-    const { refreshSpotifyToken, refreshYoutubeToken } = this.props;
+    const {
+      refreshSpotifyToken,
+      refreshYoutubeToken,
+      listenBrainzAPIBaseURI,
+      newAlert,
+    } = this.props;
     const { youtubeAuth, spotifyAuth } = this.context;
-    // Determine if the user is authenticated to search & play tracks with any of the datasources
-    const hasDatasourceToSearch =
-      this.dataSources.findIndex((ds) =>
-        ds.current?.canSearchAndPlayTracks()
-      ) !== -1;
+
     return (
       <div>
-        <PlaybackControls
+        <BrainzPlayerUI
           playPreviousTrack={this.playPreviousTrack}
           playNextTrack={this.playNextTrack}
           togglePlay={
@@ -784,17 +801,10 @@ export default class BrainzPlayer extends React.Component<
           progressMs={progressMs}
           durationMs={durationMs}
           seekToPositionMs={this.seekToPositionMs}
+          listenBrainzAPIBaseURI={listenBrainzAPIBaseURI}
+          currentListen={currentListen}
+          newAlert={newAlert}
         >
-          {!hasDatasourceToSearch && (
-            <div className="connect-services-message">
-              You need to{" "}
-              <a href="/profile/music-services/details/" target="_blank">
-                connect to a music service
-              </a>{" "}
-              and refresh this page in order to search for and play songs on
-              ListenBrainz.
-            </div>
-          )}
           <SpotifyPlayer
             show={
               isActivated &&
@@ -856,7 +866,7 @@ export default class BrainzPlayer extends React.Component<
             handleWarning={this.handleWarning}
             handleSuccess={this.handleSuccess}
           />
-        </PlaybackControls>
+        </BrainzPlayerUI>
       </div>
     );
   }
