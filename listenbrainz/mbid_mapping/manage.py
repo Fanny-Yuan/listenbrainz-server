@@ -6,7 +6,7 @@ import subprocess
 
 import click
 
-from mapping.mbid_mapping import create_mbid_mapping
+from mapping.mbid_mapping import create_mbid_mapping, create_canonical_releases
 from mapping.typesense_index import build_index as action_build_index
 from mapping.year_mapping import create_year_mapping
 from mapping.mapping_test.mapping_test import test_mapping as action_test_mapping
@@ -14,6 +14,8 @@ from mapping.utils import log, CRON_LOG_FILE
 from mapping.release_colors import sync_release_color_table, incremental_update_release_color_table
 from reports.tracks_of_the_year import calculate_tracks_of_the_year
 from reports.top_discoveries import calculate_top_discoveries
+from mapping.mb_metadata_cache import create_mb_metadata_cache
+import config
 
 
 @click.group()
@@ -66,6 +68,14 @@ def build_index():
 
 
 @cli.command()
+def build_canonical_releases():
+    """
+        Build the canonical releases table from the mapping tables.
+    """
+    create_canonical_releases()
+
+
+@cli.command()
 def sync_coverart():
     """
         Force a re-sync of the release_color table, in case it has gone out of sync.
@@ -74,6 +84,7 @@ def sync_coverart():
 
 
 @cli.command()
+@click.argument('year', type=int)
 def update_coverart():
     """
         Update the release_color table incrementally. Designed to be called hourly by cron.
@@ -111,6 +122,14 @@ def top_tracks(year):
         of which tracks and how many times a user played for a given year.
     """
     calculate_tracks_of_the_year(year)
+
+
+@cli.command()
+def build_mb_metadata_cache():
+    """
+        Build the MB metadata cache that LB uses
+    """
+    create_mb_metadata_cache()
 
 
 def usage(command):
